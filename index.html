@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Meal Reveal — διατροφικό ημερολόγιο και ανάλυση γεύματος">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Meal Reveal">
+  <title>Meal Reveal</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/meal-reveal-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon-180.png">
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; background: #fff; overflow: hidden; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #app {
+      width: 100%;
+      height: 100dvh;
+      border: 0;
+      display: block;
+      background: #fff;
+    }
+    #loading {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      background: #fff;
+      transition: opacity .2s ease;
+    }
+    #loading.hidden { opacity: 0; pointer-events: none; }
+    #loading img { width: min(62vw, 260px); height: auto; }
+    #offline {
+      position: fixed;
+      left: 1rem;
+      right: 1rem;
+      bottom: calc(1rem + env(safe-area-inset-bottom));
+      z-index: 3;
+      display: none;
+      padding: .75rem 1rem;
+      border-radius: .75rem;
+      color: #fff;
+      background: #222;
+      text-align: center;
+      font-size: .9rem;
+    }
+    #offline.visible { display: block; }
+    .fallback {
+      position: fixed;
+      right: .6rem;
+      bottom: calc(.6rem + env(safe-area-inset-bottom));
+      z-index: 1;
+      padding: .45rem .65rem;
+      border-radius: 999px;
+      color: #222;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 1px 5px rgba(0,0,0,.18);
+      font-size: .75rem;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading" aria-live="polite">
+    <img src="./icons/meal-reveal-512.png" alt="Άνοιγμα Meal Reveal">
+  </div>
+  <div id="offline">Δεν υπάρχει σύνδεση στο διαδίκτυο.</div>
+  <iframe
+    id="app"
+    title="Meal Reveal"
+    src="https://nutrition-app-kdzwt3aqnwjxgxdzgoefp6.streamlit.app/?embed=true"
+    allow="camera; microphone; clipboard-read; clipboard-write"
+    referrerpolicy="strict-origin-when-cross-origin"
+  ></iframe>
+  <a class="fallback" href="https://nutrition-app-kdzwt3aqnwjxgxdzgoefp6.streamlit.app/" target="_blank" rel="noopener">Άνοιγμα σε browser</a>
+  <script>
+    const loading = document.getElementById("loading");
+    const offline = document.getElementById("offline");
+    const app = document.getElementById("app");
+
+    app.addEventListener("load", () => loading.classList.add("hidden"));
+    setTimeout(() => loading.classList.add("hidden"), 12000);
+
+    function updateConnection() {
+      offline.classList.toggle("visible", !navigator.onLine);
+    }
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    updateConnection();
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js"));
+    }
+  </script>
+</body>
+</html>
