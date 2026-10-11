@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
+  <meta id="theme-color" name="theme-color" content="#ffffff">
   <meta name="description" content="Meal Reveal — διατροφικό ημερολόγιο και ανάλυση γεύματος">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,17 +13,36 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/meal-reveal-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon-180.png">
+  <script>
+    try {
+      const savedTheme = localStorage.getItem("mealRevealTheme");
+      document.documentElement.dataset.theme = savedTheme === "dark" ? "dark" : "light";
+    } catch (_) {
+      document.documentElement.dataset.theme = "light";
+    }
+  </script>
   <style>
-    :root { color-scheme: light; }
+    :root {
+      color-scheme: light;
+      --shell-background: #fff;
+      --shell-text: #222;
+      --fallback-background: rgba(255,255,255,.92);
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --shell-background: #0e1117;
+      --shell-text: #fafafa;
+      --fallback-background: rgba(38,39,48,.94);
+    }
     * { box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; margin: 0; background: #fff; overflow: hidden; }
+    html, body { width: 100%; height: 100%; margin: 0; background: var(--shell-background); overflow: hidden; }
     body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     #app {
       width: 100%;
       height: 100dvh;
       border: 0;
       display: block;
-      background: #fff;
+      background: var(--shell-background);
     }
     #loading {
       position: fixed;
@@ -31,7 +50,7 @@
       z-index: 2;
       display: grid;
       place-items: center;
-      background: #fff;
+      background: var(--shell-background);
       transition: opacity .2s ease;
     }
     #loading.hidden { opacity: 0; pointer-events: none; }
@@ -58,8 +77,8 @@
       z-index: 1;
       padding: .45rem .65rem;
       border-radius: 999px;
-      color: #222;
-      background: rgba(255,255,255,.92);
+      color: var(--shell-text);
+      background: var(--fallback-background);
       box-shadow: 0 1px 5px rgba(0,0,0,.18);
       font-size: .75rem;
       text-decoration: none;
@@ -74,7 +93,7 @@
   <iframe
     id="app"
     title="Meal Reveal"
-    src="https://nutrition-app-kdzwt3aqnwjxgxdzgoefp6.streamlit.app/?embed=true"
+    src="about:blank"
     allow="camera; microphone; clipboard-read; clipboard-write"
     referrerpolicy="strict-origin-when-cross-origin"
   ></iframe>
@@ -83,6 +102,42 @@
     const loading = document.getElementById("loading");
     const offline = document.getElementById("offline");
     const app = document.getElementById("app");
+    const fallback = document.querySelector(".fallback");
+    const themeColor = document.getElementById("theme-color");
+    const streamlitBase = "https://nutrition-app-kdzwt3aqnwjxgxdzgoefp6.streamlit.app/";
+
+    function savedTheme() {
+      try {
+        return localStorage.getItem("mealRevealTheme") === "dark" ? "dark" : "light";
+      } catch (_) {
+        return "light";
+      }
+    }
+
+    function applyShellTheme(theme) {
+      const safeTheme = theme === "dark" ? "dark" : "light";
+      document.documentElement.dataset.theme = safeTheme;
+      themeColor.content = safeTheme === "dark" ? "#0e1117" : "#ffffff";
+      try { localStorage.setItem("mealRevealTheme", safeTheme); } catch (_) {}
+      const fallbackUrl = new URL(streamlitBase);
+      fallbackUrl.searchParams.set("display_theme", safeTheme);
+      fallback.href = fallbackUrl.toString();
+    }
+
+    const initialTheme = savedTheme();
+    applyShellTheme(initialTheme);
+    const appUrl = new URL(streamlitBase);
+    appUrl.searchParams.set("embed", "true");
+    appUrl.searchParams.set("embed_options", "show_toolbar");
+    appUrl.searchParams.set("display_theme", initialTheme);
+    app.src = appUrl.toString();
+
+    window.addEventListener("message", event => {
+      const message = event.data;
+      if (!message || message.type !== "meal-reveal-theme"
+          || !["dark", "light"].includes(message.theme)) return;
+      applyShellTheme(message.theme);
+    });
 
     app.addEventListener("load", () => loading.classList.add("hidden"));
     setTimeout(() => loading.classList.add("hidden"), 12000);
