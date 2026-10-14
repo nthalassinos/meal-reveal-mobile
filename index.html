@@ -27,8 +27,6 @@
       --shell-background: #fff;
       --shell-text: #222;
       --fallback-background: rgba(255,255,255,.92);
-      --app-width: 100vw;
-      --app-height: 100dvh;
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
@@ -53,10 +51,12 @@
       position: fixed;
       top: 0;
       left: 0;
-      width: var(--app-width);
-      height: var(--app-height);
-      max-width: 100vw;
-      max-height: 100dvh;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
       border: 0;
       display: block;
       background: var(--shell-background);
@@ -126,11 +126,10 @@
     const authStorageKey = "mealRevealRememberedSessionV1";
 
     function syncViewport() {
-      const viewport = window.visualViewport;
-      const width = Math.round(viewport ? viewport.width : window.innerWidth);
-      const height = Math.round(viewport ? viewport.height : window.innerHeight);
-      document.documentElement.style.setProperty("--app-width", width + "px");
-      document.documentElement.style.setProperty("--app-height", height + "px");
+      // Let CSS fill the real layout viewport. Pixel values from visualViewport
+      // can briefly retain the portrait width after a phone rotates.
+      app.style.width = "100%";
+      app.style.height = "100%";
       window.scrollTo(0, 0);
     }
 
