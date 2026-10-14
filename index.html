@@ -122,6 +122,8 @@
     const fallback = document.querySelector(".fallback");
     const themeColor = document.getElementById("theme-color");
     const streamlitBase = "https://nutrition-app-kdzwt3aqnwjxgxdzgoefp6.streamlit.app/";
+    const streamlitOrigin = new URL(streamlitBase).origin;
+    const authStorageKey = "mealRevealRememberedSessionV1";
 
     function syncViewport() {
       const viewport = window.visualViewport;
@@ -171,10 +173,50 @@
     app.src = appUrl.toString();
 
     window.addEventListener("message", event => {
+      if (event.origin !== streamlitOrigin) return;
       const message = event.data;
-      if (!message || message.type !== "meal-reveal-theme"
-          || !["dark", "light"].includes(message.theme)) return;
-      applyShellTheme(message.theme);
+      if (!message || typeof message.type !== "string") return;
+      if (message.type === "meal-reveal-theme"
+          && ["dark", "light"].includes(message.theme)) {
+        applyShellTheme(message.theme);
+        return;
+      }
+      if (message.type === "meal-reveal-auth-save"
+          && typeof message.payload === "string") {
+        try {
+          const parsed = JSON.parse(message.payload);
+          if (parsed.version === 1 && parsed.expires_at * 1000 > Date.now()
+              && typeof parsed.refresh_token === "string") {
+            localStorage.setItem(authStorageKey, message.payload);
+          }
+        } catch (_) {}
+        return;
+      }
+      if (message.type === "meal-reveal-auth-clear") {
+        try { localStorage.removeItem(authStorageKey); } catch (_) {}
+        return;
+      }
+      if (message.type === "meal-reveal-auth-request" && event.source) {
+        let payload = null;
+        try {
+          payload = localStorage.getItem(authStorageKey);
+          if (payload) {
+            const parsed = JSON.parse(payload);
+            if (!parsed.expires_at || parsed.expires_at * 1000 <= Date.now()) {
+              localStorage.removeItem(authStorageKey);
+              payload = null;
+            }
+          }
+        } catch (_) {
+          payload = null;
+        }
+        if (payload) {
+          event.source.postMessage({
+            type: "meal-reveal-auth-response",
+            payload
+          }, streamlitOrigin);
+        }
+      }
     });
 
     app.addEventListener("load", () => loading.classList.add("hidden"));
