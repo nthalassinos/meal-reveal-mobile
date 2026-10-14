@@ -123,7 +123,8 @@
     const themeColor = document.getElementById("theme-color");
     const streamlitBase = "https://nutrition-app-kdzwt3aqnwjxgxdzgoefp6.streamlit.app/";
     const streamlitOrigin = new URL(streamlitBase).origin;
-    const authStorageKey = "mealRevealRememberedSessionV1";
+    // Remove the obsolete wrapper-level token that caused repeated reloads.
+    try { localStorage.removeItem("mealRevealRememberedSessionV1"); } catch (_) {}
 
     function syncViewport() {
       // Let CSS fill the real layout viewport. Pixel values from visualViewport
@@ -179,42 +180,6 @@
           && ["dark", "light"].includes(message.theme)) {
         applyShellTheme(message.theme);
         return;
-      }
-      if (message.type === "meal-reveal-auth-save"
-          && typeof message.payload === "string") {
-        try {
-          const parsed = JSON.parse(message.payload);
-          if (parsed.version === 1 && parsed.expires_at * 1000 > Date.now()
-              && typeof parsed.refresh_token === "string") {
-            localStorage.setItem(authStorageKey, message.payload);
-          }
-        } catch (_) {}
-        return;
-      }
-      if (message.type === "meal-reveal-auth-clear") {
-        try { localStorage.removeItem(authStorageKey); } catch (_) {}
-        return;
-      }
-      if (message.type === "meal-reveal-auth-request" && event.source) {
-        let payload = null;
-        try {
-          payload = localStorage.getItem(authStorageKey);
-          if (payload) {
-            const parsed = JSON.parse(payload);
-            if (!parsed.expires_at || parsed.expires_at * 1000 <= Date.now()) {
-              localStorage.removeItem(authStorageKey);
-              payload = null;
-            }
-          }
-        } catch (_) {
-          payload = null;
-        }
-        if (payload) {
-          event.source.postMessage({
-            type: "meal-reveal-auth-response",
-            payload
-          }, streamlitOrigin);
-        }
       }
     });
 
