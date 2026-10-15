@@ -1,4 +1,4 @@
-const CACHE_NAME = "meal-reveal-shell-v8";
+const CACHE_NAME = "meal-reveal-shell-v9";
 const SHELL = [
   "./",
   "./index.html",

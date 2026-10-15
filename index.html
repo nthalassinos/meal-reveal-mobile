@@ -138,26 +138,21 @@
     try { localStorage.removeItem("mealRevealRememberedSessionV1"); } catch (_) {}
 
     function syncViewport() {
-      const widthCandidates = [
-        window.innerWidth,
-        document.documentElement.clientWidth,
-        window.visualViewport && window.visualViewport.width
-      ].filter(value => Number.isFinite(value) && value > 0);
-      const heightCandidates = [
-        window.innerHeight,
-        document.documentElement.clientHeight,
-        window.visualViewport && window.visualViewport.height
-      ].filter(value => Number.isFinite(value) && value > 0);
-      if (window.matchMedia("(orientation: landscape)").matches
-          && window.screen && window.screen.width && window.screen.height) {
-        widthCandidates.push(Math.max(window.screen.width, window.screen.height));
-        heightCandidates.push(Math.min(window.screen.width, window.screen.height));
-      }
-      // During rotation some Android WebViews briefly keep the old portrait
-      // width. The largest reported width is the corrected landscape value;
-      // the smallest height avoids placing the bottom below browser chrome.
-      const width = Math.round(Math.max(...widthCandidates));
-      const height = Math.round(Math.min(...heightCandidates));
+      // visualViewport is the part that is actually visible after rotation.
+      // screen.width/height must not be used here: on several Android devices
+      // they represent a larger physical/orientation value and made the iframe
+      // wider than the window, cutting off the right half of the application.
+      const viewport = window.visualViewport;
+      const width = Math.round(
+        (viewport && viewport.width)
+        || document.documentElement.clientWidth
+        || window.innerWidth
+      );
+      const height = Math.round(
+        (viewport && viewport.height)
+        || document.documentElement.clientHeight
+        || window.innerHeight
+      );
       app.style.width = width + "px";
       app.style.height = height + "px";
       try {
@@ -217,6 +212,38 @@
       if (event.origin !== streamlitOrigin) return;
       const message = event.data;
       if (!message || typeof message.type !== "string") return;
+      if (message.type === "meal-reveal-auth-storage") {
+        const allowedActions = ["read", "write", "clear"];
+        const validRequest = typeof message.requestId === "string"
+          && message.requestId.length <= 128
+          && message.storageKey === "mealRevealRememberedSessionV2"
+          && allowedActions.includes(message.action)
+          && typeof message.payload === "string"
+          && message.payload.length <= 8192;
+        if (!validRequest) return;
+        let payload = "";
+        try {
+          if (message.action === "clear") {
+            localStorage.removeItem(message.storageKey);
+          } else if (message.action === "write") {
+            payload = message.payload;
+            if (payload) localStorage.setItem(message.storageKey, payload);
+            else localStorage.removeItem(message.storageKey);
+          } else {
+            payload = localStorage.getItem(message.storageKey) || "";
+          }
+        } catch (_) {
+          payload = "";
+        }
+        if (event.source && typeof event.source.postMessage === "function") {
+          event.source.postMessage({
+            type: "meal-reveal-auth-storage-result",
+            requestId: message.requestId,
+            payload
+          }, event.origin);
+        }
+        return;
+      }
       if (message.type === "meal-reveal-theme"
           && ["dark", "light"].includes(message.theme)) {
         applyShellTheme(message.theme);
