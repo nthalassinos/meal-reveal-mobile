@@ -36,22 +36,24 @@
     }
     * { box-sizing: border-box; }
     html {
-      position: relative;
+      position: fixed;
+      inset: 0;
       width: 100%;
       height: 100%;
-      min-width: 100%;
-      min-height: 100%;
+      min-width: 0;
+      min-height: 0;
       margin: 0;
       background: var(--shell-background);
       overflow: hidden;
       overscroll-behavior: none;
     }
     body {
-      position: relative;
+      position: fixed;
+      inset: 0;
       width: 100%;
       height: 100%;
-      min-width: 100%;
-      min-height: 100%;
+      min-width: 0;
+      min-height: 0;
       margin: 0;
       overflow: hidden;
       overscroll-behavior: none;
@@ -59,11 +61,8 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     #app {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      position: fixed;
+      inset: 0;
       width: 100%;
       height: 100%;
       max-width: none;
@@ -134,53 +133,13 @@
     const themeColor = document.getElementById("theme-color");
     const streamlitBase = "https://nutrition-app-kdzwt3aqnwjxgxdzgoefp6.streamlit.app/";
     const streamlitOrigin = new URL(streamlitBase).origin;
+    const bridgeBytes = new Uint8Array(24);
+    crypto.getRandomValues(bridgeBytes);
+    const bridgeNonce = Array.from(bridgeBytes, byte =>
+      byte.toString(16).padStart(2, "0")
+    ).join("");
     // Remove the obsolete wrapper-level token that caused repeated reloads.
     try { localStorage.removeItem("mealRevealRememberedSessionV1"); } catch (_) {}
-
-    function syncViewport() {
-      // visualViewport is the part that is actually visible after rotation.
-      // screen.width/height must not be used here: on several Android devices
-      // they represent a larger physical/orientation value and made the iframe
-      // wider than the window, cutting off the right half of the application.
-      const viewport = window.visualViewport;
-      const width = Math.round(
-        (viewport && viewport.width)
-        || document.documentElement.clientWidth
-        || window.innerWidth
-      );
-      const height = Math.round(
-        (viewport && viewport.height)
-        || document.documentElement.clientHeight
-        || window.innerHeight
-      );
-      app.style.width = width + "px";
-      app.style.height = height + "px";
-      try {
-        app.contentWindow.postMessage({
-          type: "meal-reveal-viewport", width, height
-        }, streamlitOrigin);
-      } catch (_) {}
-      window.scrollTo(0, 0);
-    }
-
-    syncViewport();
-    window.addEventListener("resize", syncViewport, { passive: true });
-    window.addEventListener("orientationchange", () => {
-      app.style.width = "100vw";
-      app.style.height = "100dvh";
-      syncViewport();
-      window.setTimeout(syncViewport, 50);
-      window.setTimeout(syncViewport, 150);
-      window.setTimeout(syncViewport, 500);
-      window.setTimeout(syncViewport, 1000);
-    }, { passive: true });
-    if (screen.orientation) {
-      screen.orientation.addEventListener("change", syncViewport);
-    }
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", syncViewport, { passive: true });
-      window.visualViewport.addEventListener("scroll", syncViewport, { passive: true });
-    }
 
     function savedTheme() {
       try {
@@ -206,16 +165,20 @@
     appUrl.searchParams.set("embed", "true");
     appUrl.searchParams.set("embed_options", "show_toolbar");
     appUrl.searchParams.set("display_theme", initialTheme);
+    appUrl.searchParams.set("mobile_bridge", bridgeNonce);
     app.src = appUrl.toString();
 
     window.addEventListener("message", event => {
-      if (event.origin !== streamlitOrigin) return;
       const message = event.data;
       if (!message || typeof message.type !== "string") return;
       if (message.type === "meal-reveal-auth-storage") {
+        // Streamlit components may use an opaque about:srcdoc origin ("null").
+        // The per-load nonce restricts this bridge to our own component.
+        if (event.origin !== streamlitOrigin && event.origin !== "null") return;
         const allowedActions = ["read", "write", "clear"];
         const validRequest = typeof message.requestId === "string"
           && message.requestId.length <= 128
+          && message.bridgeNonce === bridgeNonce
           && message.storageKey === "mealRevealRememberedSessionV2"
           && allowedActions.includes(message.action)
           && typeof message.payload === "string"
@@ -239,11 +202,13 @@
           event.source.postMessage({
             type: "meal-reveal-auth-storage-result",
             requestId: message.requestId,
+            bridgeNonce,
             payload
-          }, event.origin);
+          }, event.origin === "null" ? "*" : event.origin);
         }
         return;
       }
+      if (event.origin !== streamlitOrigin) return;
       if (message.type === "meal-reveal-theme"
           && ["dark", "light"].includes(message.theme)) {
         applyShellTheme(message.theme);
@@ -252,8 +217,6 @@
     });
 
     app.addEventListener("load", () => {
-      syncViewport();
-      window.setTimeout(syncViewport, 120);
       loading.classList.add("hidden");
     });
     setTimeout(() => loading.classList.add("hidden"), 12000);
@@ -266,7 +229,12 @@
     updateConnection();
 
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js"));
+      window.addEventListener("load", async () => {
+        const registration = await navigator.serviceWorker.register(
+          "./service-worker.js?v=10", { updateViaCache: "none" }
+        );
+        registration.update();
+      });
     }
   </script>
 </body>
