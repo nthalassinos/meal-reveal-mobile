@@ -35,20 +35,31 @@
       --fallback-background: rgba(38,39,48,.94);
     }
     * { box-sizing: border-box; }
-    html, body {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      height: 100dvh;
+    html {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-width: 100%;
+      min-height: 100%;
       margin: 0;
       background: var(--shell-background);
       overflow: hidden;
       overscroll-behavior: none;
     }
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-width: 100%;
+      min-height: 100%;
+      margin: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: var(--shell-background);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
     #app {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
       right: 0;
@@ -127,20 +138,50 @@
     try { localStorage.removeItem("mealRevealRememberedSessionV1"); } catch (_) {}
 
     function syncViewport() {
-      // Let CSS fill the real layout viewport. Pixel values from visualViewport
-      // can briefly retain the portrait width after a phone rotates.
-      app.style.width = "100%";
-      app.style.height = "100%";
+      const widthCandidates = [
+        window.innerWidth,
+        document.documentElement.clientWidth,
+        window.visualViewport && window.visualViewport.width
+      ].filter(value => Number.isFinite(value) && value > 0);
+      const heightCandidates = [
+        window.innerHeight,
+        document.documentElement.clientHeight,
+        window.visualViewport && window.visualViewport.height
+      ].filter(value => Number.isFinite(value) && value > 0);
+      if (window.matchMedia("(orientation: landscape)").matches
+          && window.screen && window.screen.width && window.screen.height) {
+        widthCandidates.push(Math.max(window.screen.width, window.screen.height));
+        heightCandidates.push(Math.min(window.screen.width, window.screen.height));
+      }
+      // During rotation some Android WebViews briefly keep the old portrait
+      // width. The largest reported width is the corrected landscape value;
+      // the smallest height avoids placing the bottom below browser chrome.
+      const width = Math.round(Math.max(...widthCandidates));
+      const height = Math.round(Math.min(...heightCandidates));
+      app.style.width = width + "px";
+      app.style.height = height + "px";
+      try {
+        app.contentWindow.postMessage({
+          type: "meal-reveal-viewport", width, height
+        }, streamlitOrigin);
+      } catch (_) {}
       window.scrollTo(0, 0);
     }
 
     syncViewport();
     window.addEventListener("resize", syncViewport, { passive: true });
     window.addEventListener("orientationchange", () => {
+      app.style.width = "100vw";
+      app.style.height = "100dvh";
       syncViewport();
+      window.setTimeout(syncViewport, 50);
       window.setTimeout(syncViewport, 150);
       window.setTimeout(syncViewport, 500);
+      window.setTimeout(syncViewport, 1000);
     }, { passive: true });
+    if (screen.orientation) {
+      screen.orientation.addEventListener("change", syncViewport);
+    }
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", syncViewport, { passive: true });
       window.visualViewport.addEventListener("scroll", syncViewport, { passive: true });
@@ -183,7 +224,11 @@
       }
     });
 
-    app.addEventListener("load", () => loading.classList.add("hidden"));
+    app.addEventListener("load", () => {
+      syncViewport();
+      window.setTimeout(syncViewport, 120);
+      loading.classList.add("hidden");
+    });
     setTimeout(() => loading.classList.add("hidden"), 12000);
 
     function updateConnection() {
