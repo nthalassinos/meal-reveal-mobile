@@ -1,12 +1,14 @@
-const CACHE_NAME = "meal-reveal-shell-v11";
+const CACHE_NAME = "meal-reveal-shell-v12";
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./icons/meal-reveal-192.png",
-  "./icons/meal-reveal-512.png",
-  "./icons/meal-reveal-maskable-512.png",
-  "./icons/apple-touch-icon-180.png"
+  "./icons/meal-reveal-192.png?v=12",
+  "./icons/meal-reveal-512.png?v=12",
+  "./icons/meal-reveal-maskable-512.png?v=12",
+  "./icons/apple-touch-icon-180.png?v=12",
+  "./icons/meal-reveal-favicon-32.png?v=12",
+  "./icons/meal-reveal-favicon-64.png?v=12"
 ];
 
 self.addEventListener("install", event => {
