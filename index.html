@@ -28,6 +28,13 @@
       --shell-background: #fff;
       --shell-text: #222;
       --fallback-background: rgba(255,255,255,.92);
+      --app-left: 0px;
+      --app-top: 0px;
+      --app-width: 100vw;
+      --app-height: 100vh;
+    }
+    @supports (width: 100dvw) {
+      :root { --app-width: 100dvw; --app-height: 100dvh; }
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
@@ -37,10 +44,9 @@
     }
     * { box-sizing: border-box; }
     html {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      position: relative;
+      width: var(--app-width);
+      height: var(--app-height);
       min-width: 0;
       min-height: 0;
       margin: 0;
@@ -49,10 +55,9 @@
       overscroll-behavior: none;
     }
     body {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      position: relative;
+      width: var(--app-width);
+      height: var(--app-height);
       min-width: 0;
       min-height: 0;
       margin: 0;
@@ -62,10 +67,11 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     #app {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      position: absolute;
+      left: var(--app-left);
+      top: var(--app-top);
+      width: var(--app-width);
+      height: var(--app-height);
       max-width: none;
       max-height: none;
       border: 0;
@@ -142,21 +148,61 @@
     // Remove the obsolete wrapper-level token that caused repeated reloads.
     try { localStorage.removeItem("mealRevealRememberedSessionV1"); } catch (_) {}
 
-    // Force the nested Streamlit document to receive a real iframe resize on
-    // Android after rotation. No viewport dimensions are guessed or retained.
+    // The top-level visual viewport is the authoritative mobile size. Explicit
+    // pixel dimensions avoid Android standalone mode retaining the previous
+    // portrait containing block after rotation.
+    let viewportFrame = null;
+    let viewportTimers = [];
+    function syncAppViewport() {
+      const viewport = window.visualViewport;
+      const scale = viewport?.scale || 1;
+      const width = Math.max(1, Math.round(
+        viewport ? viewport.width * scale : window.innerWidth
+      ));
+      const height = Math.max(1, Math.round(
+        viewport ? viewport.height * scale : window.innerHeight
+      ));
+      const root = document.documentElement;
+      root.style.setProperty("--app-left", "0px");
+      root.style.setProperty("--app-top", "0px");
+      root.style.setProperty("--app-width", `${width}px`);
+      root.style.setProperty("--app-height", `${height}px`);
+      // Reading the rectangle commits the new iframe box before notifying the
+      // embedded document. Changing the real box triggers its resize event.
+      app.getBoundingClientRect();
+      if (app.contentWindow) {
+        app.contentWindow.postMessage({
+          type: "meal-reveal-viewport",
+          width,
+          height,
+        }, streamlitOrigin);
+      }
+    }
     function refreshAppLayout() {
-      const pulse = () => {
-        app.style.width = "calc(100% - 1px)";
-        window.requestAnimationFrame(() => { app.style.width = "100%"; });
-      };
-      pulse();
-      window.setTimeout(pulse, 120);
-      window.setTimeout(pulse, 420);
+      if (viewportFrame !== null) window.cancelAnimationFrame(viewportFrame);
+      viewportFrame = window.requestAnimationFrame(() => {
+        viewportFrame = null;
+        syncAppViewport();
+      });
+      viewportTimers.forEach(timerId => window.clearTimeout(timerId));
+      viewportTimers = [80, 240, 600].map(delay =>
+        window.setTimeout(syncAppViewport, delay)
+      );
     }
     window.addEventListener("orientationchange", refreshAppLayout, { passive: true });
     window.addEventListener("resize", refreshAppLayout, { passive: true });
+    window.addEventListener("pageshow", refreshAppLayout, { passive: true });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshAppLayout();
+    });
+    if (window.screen?.orientation) {
+      window.screen.orientation.addEventListener("change", refreshAppLayout);
+    }
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", refreshAppLayout, { passive: true });
+    }
+    if (window.ResizeObserver) {
+      new ResizeObserver(refreshAppLayout).observe(document.documentElement);
     }
 
     function savedTheme() {
@@ -185,6 +231,7 @@
     appUrl.searchParams.set("display_theme", initialTheme);
     appUrl.searchParams.set("mobile_bridge", bridgeNonce);
     app.src = appUrl.toString();
+    refreshAppLayout();
 
     window.addEventListener("message", event => {
       const message = event.data;
@@ -250,7 +297,7 @@
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
         const registration = await navigator.serviceWorker.register(
-          "./service-worker.js?v=11", { updateViaCache: "none" }
+          "./service-worker.js?v=13", { updateViaCache: "none" }
         );
         registration.update();
       });
