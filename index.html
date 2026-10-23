@@ -238,12 +238,16 @@
       if (!message || typeof message.type !== "string") return;
       if (message.type === "meal-reveal-auth-storage") {
         // Streamlit components may use an opaque about:srcdoc origin ("null").
-        // The per-load nonce restricts this bridge to our own component.
+        // The per-load nonce restricts an opaque component to our own app.
+        // The exact Streamlit origin remains trusted after internal navigation
+        // even if Streamlit has removed the nonce query parameter.
         if (event.origin !== streamlitOrigin && event.origin !== "null") return;
         const allowedActions = ["read", "write", "clear"];
+        const trustedSender = event.origin === streamlitOrigin
+          || (event.origin === "null" && message.bridgeNonce === bridgeNonce);
         const validRequest = typeof message.requestId === "string"
           && message.requestId.length <= 128
-          && message.bridgeNonce === bridgeNonce
+          && trustedSender
           && message.storageKey === "mealRevealRememberedSessionV2"
           && allowedActions.includes(message.action)
           && typeof message.payload === "string"
@@ -254,9 +258,12 @@
           if (message.action === "clear") {
             localStorage.removeItem(message.storageKey);
           } else if (message.action === "write") {
-            payload = message.payload;
-            if (payload) localStorage.setItem(message.storageKey, payload);
+            const requested = message.payload;
+            if (requested) localStorage.setItem(message.storageKey, requested);
             else localStorage.removeItem(message.storageKey);
+            payload = (localStorage.getItem(message.storageKey) || "") === requested
+              ? requested
+              : "";
           } else {
             payload = localStorage.getItem(message.storageKey) || "";
           }
@@ -267,7 +274,7 @@
           event.source.postMessage({
             type: "meal-reveal-auth-storage-result",
             requestId: message.requestId,
-            bridgeNonce,
+            bridgeNonce: message.bridgeNonce || "",
             payload
           }, event.origin === "null" ? "*" : event.origin);
         }
@@ -297,7 +304,7 @@
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
         const registration = await navigator.serviceWorker.register(
-          "./service-worker.js?v=13", { updateViaCache: "none" }
+          "./service-worker.js?v=14", { updateViaCache: "none" }
         );
         registration.update();
       });
