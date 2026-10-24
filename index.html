@@ -251,7 +251,7 @@
           && message.storageKey === "mealRevealRememberedSessionV2"
           && allowedActions.includes(message.action)
           && typeof message.payload === "string"
-          && message.payload.length <= 16384;
+          && message.payload.length <= 65536;
         if (!validRequest) return;
         let payload = "";
         try {
@@ -304,7 +304,7 @@
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
         const registration = await navigator.serviceWorker.register(
-          "./service-worker.js?v=14", { updateViaCache: "none" }
+          "./service-worker.js?v=15", { updateViaCache: "none" }
         );
         registration.update();
       });
