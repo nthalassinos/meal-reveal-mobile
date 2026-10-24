@@ -280,9 +280,11 @@
         }
         return;
       }
-      if (event.origin !== streamlitOrigin) return;
       if (message.type === "meal-reveal-theme"
           && ["dark", "light"].includes(message.theme)) {
+        const trustedThemeSender = event.origin === streamlitOrigin
+          || (event.origin === "null" && message.bridgeNonce === bridgeNonce);
+        if (!trustedThemeSender) return;
         applyShellTheme(message.theme);
         return;
       }
@@ -304,7 +306,7 @@
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
         const registration = await navigator.serviceWorker.register(
-          "./service-worker.js?v=15", { updateViaCache: "none" }
+          "./service-worker.js?v=16", { updateViaCache: "none" }
         );
         registration.update();
       });
